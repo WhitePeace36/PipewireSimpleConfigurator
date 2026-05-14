@@ -6,6 +6,8 @@ It takes the pipewire configs pipewire.conf pipewire-pulse.conf and client.conf 
 
 With apply the new settings are saved and applied and the services pipewire.service, pipewire-pulse.server, pipewire.socket and pipewire-pulse.socket are restarted.
 
+So it may be that you have to also restart your wireplplumber.service or your pipewire-session-manager.service when the settings are not applied, but you will have to try.
+
 This extremely simplifies configuration of the simplest pipewire files.
 
 
