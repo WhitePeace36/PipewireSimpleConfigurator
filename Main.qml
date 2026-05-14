@@ -20,7 +20,7 @@ ApplicationWindow {
     function addResampleDefaultsToMap(map, prefix) {
         map[prefix + "resample.disable"] = "false";
         map[prefix + "resample.quality"] = "4";
-        map[prefix + "resample.window"] = "kaiser";
+        map[prefix + "resample.window"] = "exp";
         map[prefix + "resample.cutoff"] = "0.94";
         map[prefix + "resample.n-taps"] = "0";
         map[prefix + "resample.param.exp.A"] = "0.0";
@@ -70,6 +70,23 @@ ApplicationWindow {
         }
         // 2. Fall back to our hardcoded default
         return systemDefaults[key] || "";
+    }
+
+
+    function applyPreset(type) {
+        if (type === "default") {
+            resampleQualityCombo.currentIndex = resampleQualityCombo.find("4");
+            cutoffFreqCombo.currentIndex = cutoffFreqCombo.find("0.94");
+            prefillCheck.checked = false;
+            windowTypeSelector.currentIndex = windowTypeSelector.find("Exp");
+        } else if (type === "audiophile") {
+            resampleQualityCombo.currentIndex = resampleQualityCombo.find("14");
+            cutoffFreqCombo.currentIndex = cutoffFreqCombo.find("0.94");
+            prefillCheck.checked = true;
+            windowTypeSelector.currentIndex = windowTypeSelector.find("Kaiser");
+            kaiserStopband.text = 150;
+            kaiserTransitionBandwidth.text = 0.0275
+        }
     }
 
     MessageDialog {
@@ -493,7 +510,7 @@ ApplicationWindow {
                                 }
                                 ComboBox {
                                     id: windowTypeSelector
-                                    model: ["Kaiser", "Exp", "Blackman"]
+                                    model: ["Exp", "Kaiser", "Blackman"]
                                     Layout.fillWidth: true
                                 }
                             }
@@ -516,6 +533,29 @@ ApplicationWindow {
                                     validator: DoubleValidator {}
                                     Layout.fillWidth: true
                                 }
+                            }
+                            RowLayout {
+                                Layout.preferredWidth: 250 // Give the column enough room
+                                spacing: 2
+                            Button {
+                                text: "Apply Presets..."
+                                icon.name: "settings-configure" // Or any standard icon
+                                onClicked: presetMenu.open()
+
+                                Menu {
+                                    id: presetMenu
+                                    y: parent.height
+
+                                    MenuItem {
+                                        text: "Default"
+                                        onTriggered: applyPreset("default")
+                                    }
+                                    MenuItem {
+                                        text: "Best Resample Quality"
+                                        onTriggered: applyPreset("audiophile")
+                                    }
+                                }
+                            }
                             }
                         }
                     }
