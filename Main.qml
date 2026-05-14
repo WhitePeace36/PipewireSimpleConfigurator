@@ -203,8 +203,6 @@ ApplicationWindow {
         kaiserStopband.text = getSetting(p + "resample.param.kaiser.stopband-attenuation") || "";
         kaiserTransitionBandwidth.text = getSetting(p + "resample.param.kaiser.transition-bandwidth") || "";
 
-        // Extra Fields
-        resampleCutoffText.text = getSetting(p + "resample.cutoff") || "";
         nTapsText.text = getSetting(p + "resample.n-taps") || "";
 
         let qNames = ["default.clock.quantum", "default.clock.min-quantum", "default.clock.max-quantum", "default.clock.quantum-floor", "default.clock.quantum-limit"];
@@ -454,7 +452,7 @@ ApplicationWindow {
                             RowLayout {
                                 Label {
                                     text: "Resample Quality:"
-                                    Layout.preferredWidth: 200
+                                    Layout.preferredWidth: 300
                                 }
                                 ComboBox {
                                     id: resampleQualityCombo
@@ -468,14 +466,14 @@ ApplicationWindow {
                             // Cutoff Frequency (0.01 - 1.00)
                             RowLayout {
                                 Label {
-                                    text: "Cutoff Freq:"
-                                    Layout.preferredWidth: 200
+                                    text: "Cutoff Freq (multiple of nyquist (SampleRate /2)):"
+                                    Layout.preferredWidth: 300
                                 }
                                 ComboBox {
                                     id: cutoffFreqCombo
                                     // Generates 0.01 to 1.00
                                     model: Array.from({
-                                        length: 100
+                                        length: 200
                                     }, (_, i) => ((i + 1) / 100).toFixed(2))
                                     Layout.fillWidth: true
                                 }
@@ -491,7 +489,7 @@ ApplicationWindow {
                             RowLayout {
                                 Label {
                                     text: "Resample Window:"
-                                    Layout.preferredWidth: 200
+                                    Layout.preferredWidth: 300
                                 }
                                 ComboBox {
                                     id: windowTypeSelector
@@ -507,24 +505,10 @@ ApplicationWindow {
                                 onClicked: configPopup.open()
                             }
 
-                            // Extra Configurable Doubles
-                            RowLayout {
-                                Label {
-                                    text: "Resample Cutoff:"
-                                    Layout.preferredWidth: 200
-                                }
-                                TextField {
-                                    id: resampleCutoffText
-                                    placeholderText: "0.0"
-                                    validator: DoubleValidator {}
-                                    Layout.fillWidth: true
-                                }
-                            }
-
                             RowLayout {
                                 Label {
                                     text: "N-Taps:"
-                                    Layout.preferredWidth: 200
+                                    Layout.preferredWidth: 300
                                 }
                                 TextField {
                                     id: nTapsText
