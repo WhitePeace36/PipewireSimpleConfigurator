@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 ApplicationWindow {
     id: window
@@ -14,6 +15,84 @@ ApplicationWindow {
 
     Component.onCompleted: {
         loadAll();
+    }
+
+    function addResampleDefaultsToMap(map, prefix) {
+        map[prefix + "resample.disable"] = "false";
+        map[prefix + "resample.quality"] = "4";
+        map[prefix + "resample.window"] = "kaiser";
+        map[prefix + "resample.cutoff"] = "0.94";
+        map[prefix + "resample.n-taps"] = "0";
+        map[prefix + "resample.param.exp.A"] = "0.0";
+        map[prefix + "resample.param.blackman.alpha"] = "0.0";
+        map[prefix + "resample.param.kaiser.alpha"] = "0.0";
+        map[prefix + "resample.param.kaiser.stopband-attenuation"] = "0.0";
+        map[prefix + "resample.param.kaiser.transition-bandwidth"] = "0.0";
+    }
+
+    readonly property var systemDefaults: {
+        let defaults = {};
+        let pipewireConfContext = "pipewire.conf|context.properties|";
+        let clientConfStream = "client.conf|stream.properties|";
+        let pulseConfStream = "pipewire-pulse.conf|stream.properties|";
+        let pulseConfPulse = "pipewire-pulse.conf|pulse.properties|";
+
+        // Pipewire Main Server Defaults
+        defaults[pipewireConfContext + "default.clock.rate"] = "48000";
+        defaults[pipewireConfContext + "default.clock.allowed-rates"] = "[ 48000 ]";
+        defaults[pipewireConfContext + "default.clock.quantum"] = "1024";
+        defaults[pipewireConfContext + "default.clock.min-quantum"] = "32";
+        defaults[pipewireConfContext + "default.clock.max-quantum"] = "2048";
+        defaults[pipewireConfContext + "default.clock.quantum-limit"] = "8192";
+        defaults[pipewireConfContext + "default.clock.quantum-floor"] = "4";
+
+        addResampleDefaultsToMap(defaults, pipewireConfContext);
+        addResampleDefaultsToMap(defaults, clientConfStream);
+        addResampleDefaultsToMap(defaults, pulseConfStream);
+
+        defaults[clientConfStream + "node.force-rate"] = "48000";
+        defaults[pulseConfStream + "node.force-rate"] = "48000";
+
+        defaults[pulseConfPulse + "pulse.min.req"] = "256/48000";
+        defaults[pulseConfPulse + "pulse.default.req"] = "960/48000";
+        defaults[pulseConfPulse + "pulse.min.frag"] = "256/48000";
+        defaults[pulseConfPulse + "pulse.default.frag"] = "96000/48000";
+        defaults[pulseConfPulse + "pulse.default.tlength"] = "96000/48000";
+        defaults[pulseConfPulse + "pulse.min.quantum"] = "256/48000";
+
+        return defaults;
+    }
+
+    function getSetting(key) {
+        // 1. Check if the config file has a value
+        if (configData[key] !== undefined) {
+            return configData[key];
+        }
+        // 2. Fall back to our hardcoded default
+        return systemDefaults[key] || "";
+    }
+
+    MessageDialog {
+        id: resetWarning
+        title: "Reset Configuration"
+        text: "This will delete your custom settings and restart the audio engine. Proceed?"
+        buttons: MessageDialog.Yes | MessageDialog.No
+        onAccepted: {
+            backend.resetToDefaults();
+            loadConfigData();
+            fillUI();
+        }
+    }
+
+    MessageDialog {
+        id: applyWarning
+        title: "Apply Configuration"
+        text: "This will apply your custom settings and restart the audio engine. Proceed?"
+        buttons: MessageDialog.Yes | MessageDialog.No
+        onAccepted: {
+            saveAll();
+            backend.restartServices();
+        }
     }
 
     function loadAll() {
@@ -32,13 +111,9 @@ ApplicationWindow {
         fillUI();
     }
 
-
     function collectPulseBridgeSettings(map) {
         let section = "pulse.properties|";
-        let settings = [
-            "pulse.min.req", "pulse.default.req", "pulse.min.frag",
-            "pulse.default.frag", "pulse.default.tlength", "pulse.min.quantum"
-        ];
+        let settings = ["pulse.min.req", "pulse.default.req", "pulse.min.frag", "pulse.default.frag", "pulse.default.tlength", "pulse.min.quantum"];
 
         settings.forEach(name => {
             let numField = findChildByObjectName("pulse_num_" + name);
@@ -103,11 +178,11 @@ ApplicationWindow {
         let p = "pipewire.conf|context.properties|";
         let pulse = "pipewire-pulse.conf|stream.properties|";
 
-        setComboByText(defaultClockRate, configData[p + "default.clock.rate"]);
-        setComboByText(globalForceRate, configData[pulse + "node.force-rate"]);
+        setComboByText(defaultClockRate, getSetting(p + "default.clock.rate"));
+        setComboByText(globalForceRate, getSetting(pulse + "node.force-rate"));
 
         // Allowed Rates (Special Array Handling: "[ 44100 48000 ]")
-        let allowed = configData[p + "default.clock.allowed-rates"];
+        let allowed = getSetting(p + "default.clock.allowed-rates");
         if (allowed) {
             let rates = allowed.replace(/[\[\]]/g, "").trim().split(/\s+/);
             for (let i = 0; i < rateModel.count; i++) {
@@ -116,25 +191,24 @@ ApplicationWindow {
         }
 
         // Resampler Settings
-        setComboByText(resampleQualityCombo, configData[p + "resample.quality"]);
-        setComboByText(cutoffFreqCombo, configData[p + "resample.cutoff"]);
-        prefillCheck.checked = (configData[p + "resample.prefill"] === "true");
-        setComboByText(windowTypeSelector, configData[p + "resample.window"]);
+        setComboByText(resampleQualityCombo, getSetting(p + "resample.quality"));
+        setComboByText(cutoffFreqCombo, getSetting(p + "resample.cutoff"));
+        prefillCheck.checked = (getSetting(p + "resample.prefill") === "true");
+        setComboByText(windowTypeSelector, getSetting(p + "resample.window"));
 
         // Window Parameters
-        kaiserAlpha.text = configData[p + "resample.param.kaiser.alpha"] || "";
-        kaiserStopband.text = configData[p + "resample.param.kaiser.stopband-attenuation"] || "";
-        kaiserTransitionBandwidth.text = configData[p + "resample.param.kaiser.transition-bandwidth"] || "";
+        kaiserAlpha.text = getSetting(p + "resample.param.kaiser.alpha") || "";
+        kaiserStopband.text = getSetting(p + "resample.param.kaiser.stopband-attenuation") || "";
+        kaiserTransitionBandwidth.text = getSetting(p + "resample.param.kaiser.transition-bandwidth") || "";
 
         // Extra Fields
-        resampleCutoffText.text = configData[p + "resample.cutoff"] || "";
-        nTapsText.text = configData[p + "resample.n-taps"] || "";
-
+        resampleCutoffText.text = getSetting(p + "resample.cutoff") || "";
+        nTapsText.text = getSetting(p + "resample.n-taps") || "";
 
         let qNames = ["default.clock.quantum", "default.clock.min-quantum", "default.clock.max-quantum", "default.clock.quantum-floor", "default.clock.quantum-limit"];
 
         qNames.forEach(qKey => {
-            let val = configData["pipewire.conf|context.properties|" + qKey];
+            let val = getSetting("pipewire.conf|context.properties|" + qKey);
             if (val) {
                 let combo = findChildByObjectName("quantum_" + qKey);
                 if (combo) {
@@ -145,6 +219,27 @@ ApplicationWindow {
 
         // --- 2. PulseAudio Bridge ---
         // Note: Logic for the Repeater fields would go here based on configData["pipewire-pulse.conf|..."]
+
+        let pulseSection = "pipewire-pulse.conf|pulse.properties|";
+        let pulseSettings = ["pulse.min.req", "pulse.default.req", "pulse.min.frag", "pulse.default.frag", "pulse.default.tlength", "pulse.min.quantum"];
+
+        pulseSettings.forEach(name => {
+            let val = getSetting(pulseSection + name);
+            if (val) {
+                // Split "2048/192000" into ["2048", "192000"]
+                let parts = val.split('/');
+
+                let numField = findChildByObjectName("pulse_num_" + name);
+                let denField = findChildByObjectName("pulse_den_" + name);
+
+                if (numField && parts[0]) {
+                    numField.text = parts[0];
+                }
+                if (denField && parts[1]) {
+                    denField.text = parts[1];
+                }
+            }
+        });
     }
 
     // Helper function to find those repeated ComboBoxes
@@ -189,7 +284,7 @@ ApplicationWindow {
             pwMap[contextProps + key] = findChildByObjectName("quantum_" + key).currentText;
         }
 
-        collectChannelmixSettings(pwMap,contextProps);
+        collectChannelmixSettings(pwMap, contextProps);
         collectResamplerSettings(pwMap, contextProps);
 
         backend.saveToUserConfig("pipewire.conf", pwMap);
@@ -230,11 +325,7 @@ ApplicationWindow {
             Button {
                 text: "Reset and apply defaults"
                 onClicked: {
-                    backend.resetToDefaults();
-                    loadConfigData();
-                    fillUI();
-
-                    console.log("Configuration reset to system defaults.");
+                    resetWarning.open();
                 }
             }
         }
@@ -374,7 +465,7 @@ ApplicationWindow {
 
                             CheckBox {
                                 id: prefillCheck
-                                text: "Prefill"
+                                text: "Prefill buffer with 0s"
                                 Layout.fillWidth: true
                             }
 
@@ -638,11 +729,14 @@ ApplicationWindow {
                     Repeater {
                         model: quantumNames
                         delegate: RowLayout {
-                            Label { text: modelData + ":"; Layout.preferredWidth: 200 }
+                            Label {
+                                text: modelData + ":"
+                                Layout.preferredWidth: 200
+                            }
                             ComboBox {
                                 id: qBox
                                 objectName: "quantum_" + modelData // Critical for finding it later
-                                model: [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
+                                model: [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
                                 Layout.fillWidth: true
 
                                 // To help fillUI find this box later:
@@ -652,6 +746,17 @@ ApplicationWindow {
                                         currentIndex = find(val.toString());
                                     }
                                 }
+                            }
+                            Label {
+                                // Calculate: (Quantum / SampleRate) * 1000
+                                // We use parseFloat to ensure math works even if values are strings
+                                readonly property double ms: (parseFloat(qBox.currentText) / parseFloat(defaultClockRate.currentText)) * 1000
+
+                                text: ms.toFixed(2) + " ms"
+                                color: "#888888" // Light grey
+                                font.pixelSize: 11
+                                Layout.preferredWidth: 60
+                                horizontalAlignment: Text.AlignRight
                             }
                         }
                     }
@@ -738,18 +843,25 @@ ApplicationWindow {
                                     objectName: "pulse_num_" + modelData.name
                                     placeholderText: "Numerator"
                                     text: modelData.num
-                                    validator: IntValidator { bottom: 1 }
+                                    validator: IntValidator {
+                                        bottom: 1
+                                    }
                                     Layout.fillWidth: true
                                 }
 
-                                Label { text: "/"; font.bold: true }
+                                Label {
+                                    text: "/"
+                                    font.bold: true
+                                }
 
                                 TextField {
                                     // Unique name for denominator
                                     objectName: "pulse_den_" + modelData.name
                                     placeholderText: "Sample Rate"
                                     text: modelData.den
-                                    validator: IntValidator { bottom: 1 }
+                                    validator: IntValidator {
+                                        bottom: 1
+                                    }
                                     Layout.fillWidth: true
                                 }
 
@@ -790,13 +902,8 @@ ApplicationWindow {
             Button {
                 text: "Save & Apply"
                 onClicked: {
-                        // 1. Save all files first
-                        saveAll();
-                        // 2. Trigger the restart
-                        backend.restartServices();
-                        // 3. Optional: Show a toast or notification
-                        console.log("Services are restarting...");
-                    }
+                    applyWarning.open();
+                }
             }
 
             Button {
