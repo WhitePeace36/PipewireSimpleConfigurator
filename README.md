@@ -6,6 +6,15 @@ It takes the pipewire configs pipewire.conf pipewire-pulse.conf and client.conf 
 
 With apply the new settings are saved and applied and the services pipewire.service, pipewire-pulse.server, pipewire.socket and pipewire-pulse.socket are restarted.
 
+This extremely simplifies configuration of the simplest pipewire files.
+
+
+FYI: It applies the general settings too multiple .conf files.
+
+
+# Attention
+ 
+Before usage save your config files from ~/.config/pipewire when you have some there. Because it will override them when you hit the save or reset button. But it will also warn you.
 
 # Build instructions
 
