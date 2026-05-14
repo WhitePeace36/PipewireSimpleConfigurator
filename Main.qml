@@ -380,20 +380,36 @@ ApplicationWindow {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 10
+                        RowLayout {
+                            Layout.preferredWidth: 250 // Give the column enough room
+                            spacing: 2
 
-                        Label {
-                            text: "Global Node Configuration"
-                            font.bold: true
-                            font.pointSize: 14
+                            Label {
+                                text: "Global Node Configuration"
+                                font.bold: true
+                                font.pointSize: 14
+
+                            }
+                            Item {
+                                    Layout.fillWidth: true
+                                }
+                            Label {
+                                text: "The force sample rate here also has to be available in the allowed rates."
+                                color: "#888888" // Light grey for the description
+                                wrapMode: Text.WordWrap // Allow text to wrap if the column is narrow
+                                Layout.alignment: Qt.AlignRight
+                            }
                         }
-
                         RowLayout {
                             Layout.fillWidth: true
+
                             Label {
                                 text: "node.force-rate:"
                                 font.family: "Monospace"
-                                Layout.preferredWidth: 200
+                                font.bold: true
+                                Layout.fillWidth: true
                             }
+
                             ComboBox {
                                 id: globalForceRate
                                 Layout.fillWidth: true
@@ -723,7 +739,7 @@ ApplicationWindow {
                         Layout.topMargin: 10
                     }
                     Label {
-                        text: "These are the settings for the default clock rate and scale with it"
+                        text: "These are the settings for the default clock rate and scale with the used sample rate"
                         font.bold: false
                         Layout.topMargin: 10
                     }

@@ -27,3 +27,11 @@ cpack
 
 And then you can just install the package or use the binary directly
 
+
+# Pictures
+
+![General Settings](./Pictures/GeneralSettings.png)
+
+![General Settings](./Pictures/ServerSettings.png)
+
+![General Settings](./Pictures/PulseAudioSettings.png)
