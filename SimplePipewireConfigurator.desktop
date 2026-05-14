@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Pipewire Configurator
+Comment=A GUI tool for simple Pipewire configuration
+Exec=SimplePipewireConfigurator
+Icon=audio-sliders
+Terminal=false
+Categories=Settings;HardwareSettings;AudioVideo;Audio;

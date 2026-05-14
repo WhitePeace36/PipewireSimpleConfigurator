@@ -137,6 +137,7 @@ ApplicationWindow {
     }
 
     function collectResamplerSettings(map, section) {
+        map[section + "resample.disable"] = resampleEnabled.checked ? "false" : "true";
         map[section + "resample.quality"] = resampleQualityCombo.currentText || "4";
         map[section + "resample.cutoff"] = cutoffFreqCombo.currentText || "0.91";
         map[section + "resample.prefill"] = prefillCheck.checked ? "true" : "false";
@@ -191,6 +192,7 @@ ApplicationWindow {
         }
 
         // Resampler Settings
+        resampleEnabled.checked = !(getSetting(p + "resample.disable") === "true");
         setComboByText(resampleQualityCombo, getSetting(p + "resample.quality"));
         setComboByText(cutoffFreqCombo, getSetting(p + "resample.cutoff"));
         prefillCheck.checked = (getSetting(p + "resample.prefill") === "true");

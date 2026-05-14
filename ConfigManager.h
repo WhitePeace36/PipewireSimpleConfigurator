@@ -208,7 +208,7 @@ public:
     // We use /bin/sh to interpret the full command string
     // Note: 'pipewire.conf' and 'pipewire-pulse.conf' are not valid systemd units.
     // The correct services are pipewire.service and pipewire-pulse.service.
-    QString command = "systemctl restart --user pipewire.service pipewire-pulse.service pipewire.socket pipewire-pulse.socket wireplumber.service";
+    QString command = "systemctl restart --user pipewire.service pipewire-pulse.service pipewire.socket pipewire-pulse.socket";
 
     QProcess::startDetached("/bin/sh", QStringList() << "-c" << command);
     qDebug() << "Restart command sent to systemd.";
