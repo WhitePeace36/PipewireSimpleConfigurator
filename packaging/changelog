@@ -1,0 +1,15 @@
+pipewire-configurator-simple (0.2) unstable; urgency=medium
+
+  * Rework around drop-in files: only the configurator's own files are written.
+  * Per-device output and input settings, Bluetooth settings and per-application
+    rules (WirePlumber 0.5).
+  * Quantum limit is also written to the client configurations.
+  * Qt Widgets interface, new icon.
+
+ -- Timon <timon2201@gmail.com>  Mon, 02 Nov 2026 15:00:00 +0100
+
+pipewire-configurator-simple (0.1) unstable; urgency=medium
+
+  * First release.
+
+ -- Timon <timon2201@gmail.com>  Thu, 14 May 2026 12:00:00 +0200

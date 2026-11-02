@@ -82,3 +82,10 @@ CMakeLists.txt.user*
 .uic/
 /build*/
 /.qtcreator/
+
+# Packages and makepkg working directories
+*.deb
+*.rpm
+*.pkg.tar.zst
+/src/
+/pkg/

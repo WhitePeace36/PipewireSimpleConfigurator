@@ -1,8 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=Pipewire Configurator
-Comment=A GUI tool for simple Pipewire configuration
+Comment=Configure PipeWire and WirePlumber
 Exec=SimplePipewireConfigurator
-Icon=audio-sliders
+Icon=SimplePipewireConfigurator
 Terminal=false
-Categories=Settings;HardwareSettings;AudioVideo;Audio;
+Categories=AudioVideo;Audio;Mixer;
+Keywords=pipewire;wireplumber;audio;sound;latency;sample rate;bluetooth;

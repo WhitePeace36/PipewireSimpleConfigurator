@@ -1,0 +1,390 @@
+{
+  "comment": "Settings shown by Pipewire Simple Configurator. Each group appears on every page whose scope is listed in 'scopes'; a setting can narrow that with its own 'scopes'. Types: bool, int, float, enum, rate, ratelist, quantum, fraction, string, list. 'default' is the documented PipeWire/WirePlumber default and is only used when no config file and no running device report a value.",
+  "groups": [
+    {
+      "id": "graph.rates",
+      "title": "Sample rates",
+      "scopes": ["graph"],
+      "description": "The graph is the clock that every output and input device and every application stream runs on. It is shared by playback and recording.",
+      "settings": [
+        {
+          "key": "default.clock.rate",
+          "label": "Default rate",
+          "type": "rate",
+          "default": "48000",
+          "help": "Rate the graph runs at when no stream needs one of the other allowed rates."
+        },
+        {
+          "key": "default.clock.allowed-rates",
+          "label": "Allowed rates",
+          "type": "ratelist",
+          "default": "[ 48000 ]",
+          "help": "Rates the graph may switch to, so streams at these rates play without resampling. Only pick rates your devices support. Adding a rate here is the safe way to get high-resolution playback."
+        }
+      ]
+    },
+    {
+      "id": "graph.quantum",
+      "title": "Buffer size (quantum)",
+      "scopes": ["graph"],
+      "description": "Values are in samples at the default rate; the latency is shown next to each value. When the graph runs at another rate, PipeWire scales the default, minimum and maximum quantum with it (1024 at 48 kHz becomes 4096 at 192 kHz). The limit and floor are not scaled.",
+      "settings": [
+        { "key": "default.clock.quantum", "label": "Default quantum", "type": "quantum", "max": 65536, "default": "1024", "help": "Buffer size used when no stream asks for anything else. Smaller means lower latency but more CPU load and a higher risk of crackling." },
+        { "key": "default.clock.min-quantum", "label": "Minimum quantum", "type": "quantum", "max": 65536, "default": "32", "help": "Smallest buffer size a stream may request." },
+        { "key": "default.clock.max-quantum", "label": "Maximum quantum", "type": "quantum", "max": 65536, "default": "2048", "help": "Largest buffer size a stream may request." },
+        { "key": "default.clock.quantum-limit", "label": "Quantum limit", "type": "quantum", "max": 65536, "default": "8192", "help": "Hard upper limit for any buffer size, including forced ones, and the buffer space every node reserves. PipeWire accepts at most 65536. Applications size some of their own buffers from their own config, so this value is also written to client.conf, pipewire-pulse.conf and jack.conf." },
+        { "key": "default.clock.quantum-floor", "label": "Quantum floor", "type": "quantum", "max": 65536, "default": "4", "help": "Hard lower limit for any buffer size, including forced ones." },
+        { "key": "clock.power-of-two-quantum", "label": "Round quantum to a power of two", "type": "bool", "default": "true", "help": "The graph quantum is rounded down to a power of two (960 runs as 512), which is more efficient for most processing. Turn off to use values such as 960 (exactly 20 ms at 48 kHz). Quanta forced with \"Try now\" are never rounded." }
+      ]
+    },
+    {
+      "id": "stream.latency",
+      "title": "Latency",
+      "scopes": ["stream", "app"],
+      "settings": [
+        {
+          "key": "node.latency",
+          "label": "Requested latency",
+          "type": "fraction",
+          "help": "Buffer size a stream asks for when the application does not ask for one itself, written as samples / rate."
+        }
+      ]
+    },
+    {
+      "id": "stream.rate",
+      "title": "Forced rate",
+      "scopes": ["stream"],
+      "settings": [
+        {
+          "key": "node.force-rate",
+          "label": "Force graph rate",
+          "type": "rate",
+          "help": "Every playing stream forces the whole graph to this rate.",
+          "warning": "This pins the graph for every device, including Bluetooth headphones, and stops PipeWire from switching between the allowed rates. Prefer adding the rate to the allowed rates on the Graph page."
+        }
+      ]
+    },
+    {
+      "id": "node.format",
+      "title": "Device format",
+      "scopes": ["alsa-node"],
+      "description": "Leave these off to let the device follow the graph.",
+      "settings": [
+        { "key": "audio.rate", "label": "Fixed rate", "type": "rate", "help": "Always open the device at this rate. PipeWire resamples when the graph runs at a different rate." },
+        { "key": "audio.allowed-rates", "label": "Allowed rates", "type": "ratelist", "help": "Rates this device may be opened with. When the graph runs at another rate, PipeWire resamples to the nearest allowed one." },
+        {
+          "key": "audio.format",
+          "label": "Sample format",
+          "type": "enum",
+          "options": [
+            { "value": "S16LE", "label": "S16LE (16 bit)" },
+            { "value": "S24LE", "label": "S24LE (24 bit in 32)" },
+            { "value": "S24_3LE", "label": "S24_3LE (24 bit packed)" },
+            { "value": "S32LE", "label": "S32LE (32 bit)" },
+            { "value": "F32LE", "label": "F32LE (32 bit float)" }
+          ],
+          "help": "Format the device is opened with. Only pick a format the hardware supports."
+        }
+      ]
+    },
+    {
+      "id": "node.alsa",
+      "title": "Device buffering",
+      "scopes": ["alsa-node"],
+      "description": "Mostly useful against crackling or dropouts on USB and HDMI devices.",
+      "settings": [
+        { "key": "api.alsa.period-size", "label": "Period size", "type": "int", "min": 0, "max": 65536, "default": "0", "unit": "samples", "help": "Size of one hardware period. 0 lets PipeWire choose the smallest working size." },
+        { "key": "api.alsa.period-num", "label": "Number of periods", "type": "int", "min": 0, "max": 64, "default": "0", "help": "0 uses as many periods as the device allows." },
+        { "key": "api.alsa.headroom", "label": "Headroom", "type": "int", "min": 0, "max": 65536, "default": "0", "unit": "samples", "help": "Extra safety margin in the device buffer, for devices that report their position inaccurately. Raise it in steps of 256 if you hear crackling." },
+        { "key": "api.alsa.start-delay", "label": "Start delay", "type": "int", "min": 0, "max": 65536, "default": "0", "unit": "samples", "help": "Extra delay for devices that need time before they report correct positions." },
+        { "key": "api.alsa.disable-batch", "label": "Ignore batch flag", "type": "bool", "default": "false", "help": "Ignore the ALSA batch flag to save one period of latency. Can cause dropouts on devices that really need it." }
+      ]
+    },
+    {
+      "id": "node.session",
+      "title": "Device behaviour",
+      "scopes": ["alsa-node", "bt-node"],
+      "settings": [
+        { "key": "node.description", "label": "Display name", "type": "string", "help": "Name shown in sound settings and mixers." },
+        { "key": "priority.session", "label": "Default priority", "type": "int", "min": 0, "max": 100000, "help": "Devices with a higher value are preferred when WirePlumber picks the default device." },
+        { "key": "session.suspend-timeout-seconds", "label": "Suspend after idle", "type": "float", "min": 0, "max": 3600, "unit": "s", "help": "Close the device after it has been idle this long. 0 keeps it open, which avoids pops or a cut-off first second of sound, at the cost of a little power." },
+        { "key": "node.disabled", "label": "Hide this device", "type": "bool", "default": "false", "help": "Do not create this device at all." }
+      ]
+    },
+    {
+      "id": "adapter.resampler",
+      "title": "Resampler",
+      "scopes": ["stream", "alsa-node", "bt-node", "app"],
+      "description": "Used when a stream or device runs at a different rate than the graph, and to correct clock drift between devices.",
+      "presets": [
+        {
+          "label": "Best quality",
+          "scopes": ["stream", "alsa-node", "bt-node"],
+          "values": { "resample.quality": "14", "resample.window": "kaiser", "resample.cutoff": "0.94", "resample.prefill": "true", "resample.param.kaiser.stopband-attenuation": "150", "resample.param.kaiser.transition-bandwidth": "0.0275" },
+          "clear": ["resample.n-taps", "resample.param.kaiser.alpha", "resample.param.exp.A", "resample.param.blackman.alpha", "resample.disable"]
+        },
+        {
+          "label": "Use defaults",
+          "scopes": ["stream", "alsa-node", "bt-node"],
+          "values": {},
+          "clear": ["resample.quality", "resample.window", "resample.cutoff", "resample.n-taps", "resample.prefill", "resample.disable", "resample.param.exp.A", "resample.param.blackman.alpha", "resample.param.kaiser.alpha", "resample.param.kaiser.stopband-attenuation", "resample.param.kaiser.transition-bandwidth"]
+        }
+      ],
+      "settings": [
+        { "key": "resample.quality", "label": "Quality", "type": "int", "min": 0, "max": 14, "default": "4", "help": "0 is fastest, 14 is best and uses the most CPU." },
+        {
+          "key": "resample.window",
+          "label": "Filter window",
+          "type": "enum",
+          "scopes": ["stream", "alsa-node", "bt-node"],
+          "default": "exp",
+          "options": [ { "value": "exp", "label": "Exp" }, { "value": "blackman", "label": "Blackman" }, { "value": "kaiser", "label": "Kaiser" } ],
+          "help": "Window function used to build the resampling filter."
+        },
+        { "key": "resample.param.exp.A", "label": "Exp: A", "type": "float", "min": 0, "max": 1000, "default": "0", "scopes": ["stream", "alsa-node", "bt-node"], "showIf": { "key": "resample.window", "values": ["exp"] }, "help": "0 picks a value that matches the quality level." },
+        { "key": "resample.param.blackman.alpha", "label": "Blackman: alpha", "type": "float", "min": 0, "max": 1, "default": "0", "scopes": ["stream", "alsa-node", "bt-node"], "showIf": { "key": "resample.window", "values": ["blackman"] }, "help": "0 picks a value that matches the quality level." },
+        { "key": "resample.param.kaiser.alpha", "label": "Kaiser: alpha", "type": "float", "min": 0, "max": 100, "default": "0", "scopes": ["stream", "alsa-node", "bt-node"], "showIf": { "key": "resample.window", "values": ["kaiser"] }, "help": "0 derives it from the stopband attenuation." },
+        { "key": "resample.param.kaiser.stopband-attenuation", "label": "Kaiser: stopband attenuation", "type": "float", "min": 0, "max": 400, "default": "0", "unit": "dB", "scopes": ["stream", "alsa-node", "bt-node"], "showIf": { "key": "resample.window", "values": ["kaiser"] }, "help": "0 picks a value that matches the quality level." },
+        { "key": "resample.param.kaiser.transition-bandwidth", "label": "Kaiser: transition bandwidth", "type": "float", "min": 0, "max": 1, "default": "0", "scopes": ["stream", "alsa-node", "bt-node"], "showIf": { "key": "resample.window", "values": ["kaiser"] }, "help": "0 picks a value that matches the quality level." },
+        { "key": "resample.cutoff", "label": "Cutoff", "type": "float", "min": 0, "max": 1, "default": "0", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Filter cutoff as a fraction of the Nyquist frequency (half the sample rate). 0 picks a value that matches the quality level." },
+        { "key": "resample.n-taps", "label": "Filter taps", "type": "int", "min": 0, "max": 65536, "default": "0", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Filter length. 0 picks a value that matches the quality level." },
+        { "key": "resample.prefill", "label": "Prefill with silence", "type": "bool", "default": "false", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Fill the resampler with silence when it starts, so the first samples are not lost." },
+        {
+          "key": "resample.disable",
+          "label": "Disable resampling",
+          "type": "bool",
+          "default": "false",
+          "scopes": ["stream", "alsa-node", "bt-node"],
+          "help": "Turn the resampler off completely.",
+          "warning": "Streams or devices whose rate differs from the graph will then play at the wrong speed, and devices cannot correct clock drift. Bluetooth devices always need the resampler."
+        }
+      ]
+    },
+    {
+      "id": "adapter.channelmix",
+      "title": "Channel mixing",
+      "scopes": ["stream", "alsa-node", "bt-node", "app"],
+      "description": "How channels are mixed when a stream and a device have a different channel layout, for example stereo music on 5.1 speakers.",
+      "presets": [
+        {
+          "label": "Disable upmixing",
+          "scopes": ["stream", "alsa-node", "bt-node"],
+          "values": {
+            "channelmix.disable": "false", "channelmix.normalize": "false", "channelmix.mix-lfe": "false", "channelmix.lock-volumes": "false",
+            "channelmix.upmix": "false", "channelmix.upmix-method": "none", "channelmix.lfe-cutoff": "0", "channelmix.fc-cutoff": "0",
+            "channelmix.rear-delay": "0", "channelmix.stereo-widen": "0.0", "channelmix.hilbert-taps": "0"
+          },
+          "clear": []
+        },
+        {
+          "label": "Use defaults",
+          "scopes": ["stream", "alsa-node", "bt-node"],
+          "values": {},
+          "clear": ["channelmix.disable", "channelmix.normalize", "channelmix.mix-lfe", "channelmix.lock-volumes", "channelmix.upmix", "channelmix.upmix-method", "channelmix.lfe-cutoff", "channelmix.fc-cutoff", "channelmix.rear-delay", "channelmix.stereo-widen", "channelmix.hilbert-taps"]
+        }
+      ],
+      "settings": [
+        { "key": "channelmix.upmix", "label": "Upmix", "type": "bool", "help": "Spread stereo to surround speakers." },
+        {
+          "key": "channelmix.upmix-method",
+          "label": "Upmix method",
+          "type": "enum",
+          "scopes": ["stream", "alsa-node", "bt-node"],
+          "options": [ { "value": "none", "label": "None" }, { "value": "simple", "label": "Simple" }, { "value": "psd", "label": "Passive surround decoding" } ],
+          "help": "How the extra channels are created when upmixing."
+        },
+        { "key": "channelmix.mix-lfe", "label": "Mix LFE into other channels", "type": "bool", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Mix the subwoofer channel into the remaining channels when the device has no LFE output." },
+        { "key": "channelmix.normalize", "label": "Normalize", "type": "bool", "default": "false", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Lower the volume when mixing so the sum cannot clip." },
+        { "key": "channelmix.lfe-cutoff", "label": "LFE cutoff", "type": "float", "min": 0, "max": 1000, "unit": "Hz", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Low-pass filter for the generated LFE channel. 0 disables it." },
+        { "key": "channelmix.fc-cutoff", "label": "Center cutoff", "type": "float", "min": 0, "max": 48000, "unit": "Hz", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Low-pass filter for the generated center channel. 0 disables it." },
+        { "key": "channelmix.rear-delay", "label": "Rear delay", "type": "float", "min": 0, "max": 1000, "unit": "ms", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Delay of the generated rear channels." },
+        { "key": "channelmix.stereo-widen", "label": "Stereo widen", "type": "float", "min": 0, "max": 1, "default": "0", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Subtract part of the center from the front channels. 0 disables it." },
+        { "key": "channelmix.hilbert-taps", "label": "Hilbert taps", "type": "int", "min": 0, "max": 1024, "default": "0", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Phase shift for the rear channels. 0 disables it." },
+        { "key": "channelmix.lock-volumes", "label": "Lock volumes", "type": "bool", "default": "false", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Ignore volume changes from applications." },
+        { "key": "channelmix.disable", "label": "Disable channel mixing", "type": "bool", "default": "false", "scopes": ["stream", "alsa-node", "bt-node"], "help": "Turn channel mixing off completely. Channels are then passed through by position only." }
+      ]
+    },
+    {
+      "id": "adapter.dither",
+      "title": "Dither",
+      "scopes": ["stream", "alsa-node", "bt-node"],
+      "description": "Only matters when the output format has fewer bits than the 32 bit float used internally.",
+      "settings": [
+        {
+          "key": "dither.method",
+          "label": "Method",
+          "type": "enum",
+          "default": "none",
+          "options": [
+            { "value": "none", "label": "None" },
+            { "value": "rectangular", "label": "Rectangular" },
+            { "value": "triangular", "label": "Triangular" },
+            { "value": "triangular-hf", "label": "Sloped triangular" },
+            { "value": "wannamaker3", "label": "Wannamaker 3 (noise shaped)" },
+            { "value": "shaped5", "label": "Lipshitz 5 (noise shaped)" }
+          ],
+          "help": "Noise added before reducing the bit depth, to avoid quantization distortion."
+        },
+        { "key": "dither.noise", "label": "Extra noise bits", "type": "int", "min": 0, "max": 16, "default": "0", "help": "Adds noise of this many bits, mainly for testing." }
+      ]
+    },
+    {
+      "id": "adapter.filtergraph",
+      "title": "Filter graphs",
+      "scopes": ["stream", "alsa-node", "bt-node"],
+      "settings": [
+        {
+          "key": "audioconvert.filter-graph.disable",
+          "label": "Disable filter graphs",
+          "type": "bool",
+          "default": "false",
+          "help": "Do not run filter graphs (EQ and other filters configured in PipeWire or WirePlumber) on these nodes.",
+          "warning": "This also turns off EQ and other filters configured as PipeWire filter graphs."
+        }
+      ]
+    },
+    {
+      "id": "pulse.buffers",
+      "title": "PulseAudio buffers",
+      "scopes": ["pulse", "app"],
+      "description": "Buffer sizes for applications that use the PulseAudio API, written as samples / rate.",
+      "settings": [
+        { "key": "pulse.min.req", "label": "Minimum request", "type": "fraction", "default": "256/48000", "help": "Smallest write a client may ask for." },
+        { "key": "pulse.default.req", "label": "Default request", "type": "fraction", "default": "960/48000", "scopes": ["pulse"], "help": "Write size for clients that do not ask for one." },
+        { "key": "pulse.min.frag", "label": "Minimum fragment", "type": "fraction", "default": "256/48000", "scopes": ["pulse"], "help": "Smallest fragment size for recording streams." },
+        { "key": "pulse.default.frag", "label": "Default fragment", "type": "fraction", "default": "96000/48000", "scopes": ["pulse"], "help": "Fragment size for recording streams that do not ask for one." },
+        { "key": "pulse.default.tlength", "label": "Default target length", "type": "fraction", "default": "96000/48000", "scopes": ["pulse"], "help": "Buffer length for playback streams that do not ask for one." },
+        { "key": "pulse.min.quantum", "label": "Minimum quantum", "type": "fraction", "default": "256/48000", "help": "Smallest quantum a client can force on the graph." },
+        { "key": "pulse.idle.timeout", "label": "Pause after underrun", "type": "int", "min": 0, "max": 3600, "default": "0", "unit": "s", "help": "Pause a stream that keeps underrunning for this long. 0 never pauses." }
+      ]
+    },
+    {
+      "id": "app.quirks",
+      "title": "PulseAudio quirks",
+      "scopes": ["app"],
+      "settings": [
+        {
+          "key": "quirks",
+          "label": "Quirks",
+          "type": "list",
+          "options": [
+            { "value": "force-s16-info", "label": "Report S16 format" },
+            { "value": "remove-capture-dont-move", "label": "Allow moving recording streams" },
+            { "value": "block-source-volume", "label": "Block microphone volume changes" },
+            { "value": "block-sink-volume", "label": "Block output volume changes" }
+          ],
+          "help": "Workarounds for applications that misbehave. Blocking microphone volume changes stops apps such as Discord or Chrome from changing your mic level."
+        }
+      ]
+    },
+    {
+      "id": "bt.codecs",
+      "title": "Codecs",
+      "scopes": ["bt-global"],
+      "settings": [
+        {
+          "key": "bluez5.codecs",
+          "label": "Allowed codecs",
+          "type": "list",
+          "options": [
+            { "value": "sbc", "label": "SBC" },
+            { "value": "sbc_xq", "label": "SBC-XQ" },
+            { "value": "aac", "label": "AAC" },
+            { "value": "aac_eld", "label": "AAC-ELD" },
+            { "value": "ldac", "label": "LDAC" },
+            { "value": "aptx", "label": "aptX" },
+            { "value": "aptx_hd", "label": "aptX HD" },
+            { "value": "aptx_ll", "label": "aptX LL" },
+            { "value": "aptx_ll_duplex", "label": "aptX LL duplex" },
+            { "value": "faststream", "label": "FastStream" },
+            { "value": "faststream_duplex", "label": "FastStream duplex" },
+            { "value": "lc3plus_hr", "label": "LC3plus HR" },
+            { "value": "lhdc_v5", "label": "LHDC V5" },
+            { "value": "opus_05", "label": "Opus 05" },
+            { "value": "opus_05_51", "label": "Opus 05 5.1" },
+            { "value": "opus_05_71", "label": "Opus 05 7.1" },
+            { "value": "opus_05_duplex", "label": "Opus 05 duplex" },
+            { "value": "opus_05_pro", "label": "Opus 05 pro" },
+            { "value": "opus_g", "label": "Opus G" },
+            { "value": "lc3", "label": "LC3 (LE Audio)" }
+          ],
+          "help": "Codecs offered to headphones. When not set, every codec your PipeWire build supports is allowed. Codecs your PipeWire build lacks are ignored."
+        },
+        { "key": "bluez5.enable-sbc-xq", "label": "Enable SBC-XQ", "type": "bool", "help": "Higher-bitrate SBC. Works on most headphones but not all, so by default it is only enabled for known-good models." },
+        {
+          "key": "bluez5.default.rate",
+          "label": "Codec sample rate",
+          "type": "enum",
+          "default": "48000",
+          "options": [ { "value": "44100", "label": "44100 Hz" }, { "value": "48000", "label": "48000 Hz" }, { "value": "88200", "label": "88200 Hz" }, { "value": "96000", "label": "96000 Hz" } ],
+          "help": "Preferred rate when the headphones support several. This is chosen when the device connects, independently of the graph rate."
+        }
+      ]
+    },
+    {
+      "id": "bt.profiles",
+      "title": "Profiles",
+      "scopes": ["bt-global"],
+      "settings": [
+        {
+          "key": "bluez5.roles",
+          "label": "Enabled roles",
+          "type": "list",
+          "default": "[ a2dp_sink a2dp_source bap_sink bap_source hfp_hf hfp_ag ]",
+          "options": [
+            { "value": "a2dp_sink", "label": "A2DP sink (high quality playback)" },
+            { "value": "a2dp_source", "label": "A2DP source" },
+            { "value": "bap_sink", "label": "LE Audio sink" },
+            { "value": "bap_source", "label": "LE Audio source" },
+            { "value": "hfp_hf", "label": "HFP hands-free (headset with mic)" },
+            { "value": "hfp_ag", "label": "HFP audio gateway" },
+            { "value": "hsp_hs", "label": "HSP headset" },
+            { "value": "hsp_ag", "label": "HSP audio gateway" }
+          ],
+          "help": "Bluetooth profiles this computer offers. Removing the HFP roles disables the headset (microphone) profile."
+        },
+        { "key": "bluez5.enable-msbc", "label": "Enable mSBC", "type": "bool", "help": "Wideband speech codec for the headset profile. Enabled by default for known-good headsets." },
+        { "key": "bluez5.enable-hw-volume", "label": "Hardware volume", "type": "bool", "help": "Let the headphones control the volume themselves. Turn off if volume jumps or is too quiet." },
+        {
+          "key": "bluez5.hfphsp-backend",
+          "label": "Headset backend",
+          "type": "enum",
+          "default": "native",
+          "options": [ { "value": "native", "label": "Native" }, { "value": "ofono", "label": "oFono" }, { "value": "hsphfpd", "label": "hsphfpd" }, { "value": "any", "label": "Any" }, { "value": "none", "label": "None" } ],
+          "help": "Which component handles the headset profile."
+        }
+      ]
+    },
+    {
+      "id": "bt.autoswitch",
+      "title": "Automatic profile switching",
+      "scopes": ["wp-settings"],
+      "settings": [
+        { "key": "bluetooth.autoswitch-to-headset-profile", "label": "Switch to headset profile for the microphone", "type": "bool", "default": "true", "help": "When an application starts recording, switch the headphones to the headset profile so the microphone works. This lowers playback quality until recording stops." }
+      ]
+    },
+    {
+      "id": "bt.device",
+      "title": "Codec quality",
+      "scopes": ["bt-device"],
+      "settings": [
+        {
+          "key": "bluez5.a2dp.ldac.quality",
+          "label": "LDAC quality",
+          "type": "enum",
+          "default": "auto",
+          "options": [ { "value": "auto", "label": "Adaptive" }, { "value": "hq", "label": "High (990 kbps)" }, { "value": "sq", "label": "Standard (660 kbps)" }, { "value": "mq", "label": "Mobile (330 kbps)" } ],
+          "help": "High quality needs a strong Bluetooth signal and drops out more easily, especially near 2.4 GHz Wi-Fi."
+        },
+        {
+          "key": "bluez5.a2dp.aac.bitratemode",
+          "label": "AAC bitrate mode",
+          "type": "enum",
+          "default": "0",
+          "options": [ { "value": "0", "label": "Constant bitrate" }, { "value": "1", "label": "Variable, level 1" }, { "value": "2", "label": "Variable, level 2" }, { "value": "3", "label": "Variable, level 3" }, { "value": "4", "label": "Variable, level 4" }, { "value": "5", "label": "Variable, level 5 (best)" } ],
+          "help": "Variable bitrate gives better quality for the same bandwidth on most headphones."
+        }
+      ]
+    }
+  ]
+}

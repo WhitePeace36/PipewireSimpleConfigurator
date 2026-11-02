@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Pipewire Simple Configurator: three mixer faders over a sound wave. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f86e0"/>
+      <stop offset="1" stop-color="#1c3d8c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- tile -->
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#tile)"/>
+  <rect x="8" y="8" width="112" height="56" rx="26" fill="#ffffff" opacity="0.07"/>
+
+  <!-- sound wave behind the faders -->
+  <path d="M16 64 C 24 38, 32 38, 40 64 S 56 90, 64 64 S 80 38, 88 64 S 104 90, 112 64"
+        fill="none" stroke="#8fdcff" stroke-width="5" stroke-linecap="round" opacity="0.35"/>
+
+  <!-- fader tracks -->
+  <g stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.32">
+    <line x1="36" y1="28" x2="36" y2="100"/>
+    <line x1="64" y1="28" x2="64" y2="100"/>
+    <line x1="92" y1="28" x2="92" y2="100"/>
+  </g>
+
+  <!-- knob shadows -->
+  <g fill="#0b2259" opacity="0.45">
+    <rect x="23" y="69" width="26" height="18" rx="5"/>
+    <rect x="51" y="39" width="26" height="18" rx="5"/>
+    <rect x="79" y="56" width="26" height="18" rx="5"/>
+  </g>
+  <!-- fader knobs -->
+  <g fill="#ffffff">
+    <rect x="23" y="66" width="26" height="18" rx="5"/>
+    <rect x="51" y="36" width="26" height="18" rx="5"/>
+    <rect x="79" y="53" width="26" height="18" rx="5"/>
+  </g>
+  <g stroke="#2f6fd0" stroke-width="3" stroke-linecap="round">
+    <line x1="29" y1="75" x2="43" y2="75"/>
+    <line x1="57" y1="45" x2="71" y2="45"/>
+    <line x1="85" y1="62" x2="99" y2="62"/>
+  </g>
+</svg>
