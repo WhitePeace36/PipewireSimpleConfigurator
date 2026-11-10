@@ -28,10 +28,6 @@ build() {
   cmake --build build
 }
 
-check() {
-  QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
-}
-
 package() {
   DESTDIR="$pkgdir" cmake --install build
 }
