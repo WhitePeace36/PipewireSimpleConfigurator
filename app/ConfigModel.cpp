@@ -57,11 +57,13 @@ QString formatValues(const Values& values, int indent, const QStringList& skip =
     QString text;
     if (v.typeId() == QMetaType::QStringList)
       text = SpaJson::formatValue(v);
+    else if (v.typeId() == QMetaType::QVariantMap || v.typeId() == QMetaType::QVariantList)
+      text = SpaJson::formatValue(v, indent);  // nested value from a hand edit, written back as read
     else if (def && def->type == SettingDef::String)
       text = quoted(v.toString());  // free text, e.g. a display name
     else
       text = SpaJson::formatScalar(v.toString());
-    out += pad + key + " = " + text + "\n";
+    out += pad + SpaJson::formatScalar(key) + " = " + text + "\n";
   }
   return out;
 }
@@ -105,7 +107,7 @@ QString rules(const QString& name, const QList<Rule>& list, bool withQuirks, Rul
       continue;
     body += "    {\n";
     body += "        matches = [\n";
-    body += "            { " + r.matchKey + " = " + quoted(r.matchValue) + " }\n";
+    body += "            { " + SpaJson::formatScalar(r.matchKey) + " = " + quoted(r.matchValue) + " }\n";
     body += "        ]\n";
     body += "        actions = {\n";
     if (!props.isEmpty())
@@ -120,16 +122,26 @@ QString rules(const QString& name, const QList<Rule>& list, bool withQuirks, Rul
   return "\n" + name + " = [\n" + body + "]\n";
 }
 
+bool containsObjects(const QVariantList& list)
+{
+  for (const QVariant& v : list)
+  {
+    if (v.typeId() == QMetaType::QVariantMap || v.typeId() == QMetaType::QVariantList)
+      return true;
+  }
+  return false;
+}
+
 Values toValues(const QVariant& v)
 {
   Values out;
   const QVariantMap map = v.toMap();
   for (auto it = map.begin(); it != map.end(); ++it)
   {
-    if (it->typeId() == QMetaType::QVariantList)
+    if (it->typeId() == QMetaType::QVariantList && !containsObjects(it->toList()))
       out.insert(it.key(), SpaJson::toStringList(*it));
-    else if (it->typeId() == QMetaType::QVariantMap)
-      out.insert(it.key(), SpaJson::formatValue(*it));  // keep nested objects as text
+    else if (it->typeId() == QMetaType::QVariantList || it->typeId() == QMetaType::QVariantMap)
+      out.insert(it.key(), *it);  // nested objects (hand edits) are kept as parsed and written back as such
     else
       out.insert(it.key(), it->toString());
   }
@@ -167,26 +179,42 @@ QList<Rule> toRules(const QVariant& v, QStringList* warnings, const QString& fil
   return out;
 }
 
-QVariantMap readDoc(const QString& path, QStringList* warnings)
+QVariantMap readDoc(const QString& path, QStringList* warnings, bool* unreadable = nullptr)
 {
+  if (unreadable)
+    *unreadable = false;
   QFile f(path);
   if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
     return {};
   SpaJson::Error error;
   const QVariantMap doc = SpaJson::parseDocument(QString::fromUtf8(f.readAll()), &error);
+  if (error.isError() && unreadable)
+    *unreadable = true;
   if (error.isError() && warnings)
-    warnings->append(QObject::tr("%1:%2: %3. The file is ignored and will be replaced when you save.").arg(path).arg(error.line).arg(error.message));
+    warnings->append(QObject::tr("%1:%2: %3. The configurator ignores this file and leaves it alone. If you change settings that are stored in it, it "
+                                 "is renamed to *.bak-<date> and replaced.")
+                       .arg(path)
+                       .arg(error.line)
+                       .arg(error.message));
   return doc;
 }
 }  // namespace
 
-ConfigModel ConfigModel::load(const ConfigPaths& paths, QStringList* warnings)
+ConfigModel ConfigModel::load(const ConfigPaths& paths, QStringList* warnings, QSet<ConfigFile>* unreadable)
 {
   ConfigModel m;
-  const QVariantMap pw = readDoc(paths.ownFile(ConfigFile::Pipewire), warnings);
-  const QVariantMap client = readDoc(paths.ownFile(ConfigFile::Client), warnings);
-  const QVariantMap pulse = readDoc(paths.ownFile(ConfigFile::Pulse), warnings);
-  const QVariantMap wp = readDoc(paths.ownFile(ConfigFile::WirePlumber), warnings);
+  auto read = [&](ConfigFile f)
+  {
+    bool broken = false;
+    const QVariantMap doc = readDoc(paths.ownFile(f), warnings, &broken);
+    if (broken && unreadable)
+      unreadable->insert(f);
+    return doc;
+  };
+  const QVariantMap pw = read(ConfigFile::Pipewire);
+  const QVariantMap client = read(ConfigFile::Client);
+  const QVariantMap pulse = read(ConfigFile::Pulse);
+  const QVariantMap wp = read(ConfigFile::WirePlumber);
 
   m.graph = toValues(pw.value("context.properties"));
   // Both files get the same stream settings; pipewire-pulse.conf wins if they were edited apart.
@@ -360,4 +388,38 @@ LegacyImport importLegacyCopies(const ConfigPaths& paths, ConfigModel& model)
   }
   r.imported.removeDuplicates();
   return r;
+}
+
+bool retireLegacyCopies(const QStringList& files, QStringList* backups, QString* error)
+{
+  QList<QPair<QString, QString>> done;  // original, backup
+  for (const QString& f : files)
+  {
+    const QString target = backupPath(f);
+    if (QFile::rename(f, target))
+    {
+      done.append({f, target});
+      continue;
+    }
+    // Undo, newest first, so the files are exactly as before.
+    QStringList stuck;
+    for (auto it = done.crbegin(); it != done.crend(); ++it)
+    {
+      if (!QFile::rename(it->second, it->first))
+        stuck.append(QObject::tr("%1 is now %2").arg(it->first, it->second));
+    }
+    if (error)
+      *error = stuck.isEmpty() ? QObject::tr("Could not rename %1. Nothing was changed on disk.").arg(f)
+                               : QObject::tr("Could not rename %1, and could not undo the renames before it: %2.").arg(f, stuck.join(", "));
+    if (backups)
+      backups->clear();
+    return false;
+  }
+  if (backups)
+  {
+    backups->clear();
+    for (const auto& d : done)
+      backups->append(d.second);
+  }
+  return true;
 }

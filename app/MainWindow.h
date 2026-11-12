@@ -87,6 +87,7 @@ private:
   QMap<ConfigFile, QString> m_baseline;  // render() of the model as last loaded or saved
   QMap<ConfigFile, EffectiveConfig> m_effective;
   QStringList m_loadWarnings;
+  QSet<ConfigFile> m_unreadable;  // own files that did not parse; left alone unless their settings change
   QSet<ConfigFile> m_unapplied;  // saved but services not restarted yet
   QString m_wpVersion;
   bool m_wpSupported = true;

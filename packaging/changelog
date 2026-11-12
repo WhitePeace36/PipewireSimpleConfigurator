@@ -1,4 +1,4 @@
-pipewire-configurator-simple (0.2) unstable; urgency=medium
+pipewire-configurator-simple (2.0) unstable; urgency=medium
 
   * Rework around drop-in files: only the configurator's own files are written.
   * Per-device output and input settings, Bluetooth settings and per-application

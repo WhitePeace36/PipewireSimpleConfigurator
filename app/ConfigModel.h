@@ -4,10 +4,12 @@
 
 #include <QList>
 #include <QMap>
+#include <QSet>
 #include <QString>
 #include <QVariant>
 
-// key -> value. Scalars are QString, lists are QStringList.
+// key -> value. Scalars are QString, lists are QStringList. Values the configurator does not manage
+// (hand edits) may also be a QVariantMap or a QVariantList of objects; they are written back as read.
 using Values = QMap<QString, QVariant>;
 
 // One "matches = [ { key = value } ] actions = { update-props = { ... } }" rule.
@@ -36,8 +38,9 @@ public:
   QList<Rule> appRules;          // pulse.rules + stream.rules in pipewire-pulse.conf.d (application.process.binary)
   bool includeClientRt = false;  // also write stream settings to client-rt.conf.d (PipeWire < 1.4)
 
-  // Reads the tool's own drop-ins. Problems (e.g. hand edits that do not parse) go to |warnings|.
-  static ConfigModel load(const ConfigPaths& paths, QStringList* warnings = nullptr);
+  // Reads the tool's own drop-ins. Problems (e.g. hand edits that do not parse) go to |warnings|, and
+  // the files that could not be parsed (and are therefore ignored) to |unreadable|.
+  static ConfigModel load(const ConfigPaths& paths, QStringList* warnings = nullptr, QSet<ConfigFile>* unreadable = nullptr);
 
   // Graph settings that clients read from their own context.properties as well. Clients size some
   // buffers from their own config (e.g. pw_filter, port defaults), so a raised limit must reach them too.
@@ -72,3 +75,7 @@ struct LegacyImport
 };
 LegacyImport findLegacyCopies(const ConfigPaths& paths);
 LegacyImport importLegacyCopies(const ConfigPaths& paths, ConfigModel& model);
+
+// Renames the legacy copies to *.bak-<date>, all or nothing: when one cannot be renamed, the ones
+// renamed so far are moved back. |backups| receives the new names, |error| a message on failure.
+bool retireLegacyCopies(const QStringList& files, QStringList* backups, QString* error);

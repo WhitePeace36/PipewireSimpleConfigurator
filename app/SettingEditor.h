@@ -64,6 +64,8 @@ signals:
 
 private:
   void onOverrideToggled(bool on);
+  // The editor holds something that can be written (valid, not blank, not an empty list).
+  bool editorHasValue() const;
   void onEdited();
   void updateHints();
 
@@ -75,6 +77,7 @@ private:
   QLabel* m_extra = nullptr;
   QLabel* m_warning = nullptr;
   bool m_updating = false;
+  bool m_pending = false;  // ticked, but no value entered yet: nothing is written
 };
 
 // Converts a value to the text used for comparisons and display ("[ 44100 48000 ]" for lists).

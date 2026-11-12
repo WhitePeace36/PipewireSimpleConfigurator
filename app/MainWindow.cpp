@@ -6,7 +6,6 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QComboBox>
-#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -41,15 +40,6 @@ QString shortPath(const QString& path)
 QString mono(const QString& s)
 {
   return "<code>" + shortPath(s).toHtmlEscaped() + "</code>";
-}
-
-QString backupName(const QString& path)
-{
-  const QString base = path + ".bak-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
-  QString candidate = base;
-  for (int i = 1; QFile::exists(candidate); ++i)
-    candidate = base + "-" + QString::number(i);
-  return candidate;
 }
 
 QString stateText(const QString& state)
@@ -204,7 +194,8 @@ MainWindow::MainWindow(const Options& options, QWidget* parent) : QMainWindow(pa
 void MainWindow::reloadFromDisk()
 {
   m_loadWarnings.clear();
-  m_model = ConfigModel::load(m_paths, &m_loadWarnings);
+  m_unreadable.clear();
+  m_model = ConfigModel::load(m_paths, &m_loadWarnings, &m_unreadable);
   m_baseline = m_model.render();
   for (ConfigFile f : allConfigFiles())
   {
@@ -255,12 +246,24 @@ bool MainWindow::save()
 {
   m_model.removeEmptyRules();
   const QMap<ConfigFile, QString> files = m_model.render();
-  QStringList written, removed;
+  QStringList written, removed, backedUp;
   for (auto it = files.begin(); it != files.end(); ++it)
   {
     const QString path = m_paths.ownFile(it.key());
-    if (it.value() == m_baseline.value(it.key()) && QFile::exists(path) == !it.value().isEmpty())
-      continue;
+    const bool unreadable = m_unreadable.contains(it.key()) && QFile::exists(path);
+    if (it.value() == m_baseline.value(it.key()) && (unreadable || QFile::exists(path) == !it.value().isEmpty()))
+      continue;  // unchanged; a file that did not parse is left exactly as the user wrote it
+    if (unreadable)
+    {
+      // Its settings changed, so it has to be replaced: keep the hand-edited version next to it.
+      const QString backup = backupPath(path);
+      if (!QFile::rename(path, backup))
+      {
+        setStatus(tr("Could not rename %1 to keep a copy of it. Nothing more was saved.").arg(path), true);
+        return false;
+      }
+      backedUp.append(backup);
+    }
     if (it.value().isEmpty())
     {
       if (QFile::exists(path) && !QFile::remove(path))
@@ -268,7 +271,8 @@ bool MainWindow::save()
         setStatus(tr("Could not remove %1.").arg(path), true);
         return false;
       }
-      removed.append(path);
+      if (!unreadable)
+        removed.append(path);
     }
     else
     {
@@ -294,10 +298,12 @@ bool MainWindow::save()
     parts.append(tr("Saved %1.").arg(written.join(", ")));
   if (!removed.isEmpty())
     parts.append(tr("Removed %1 (nothing left to set).").arg(removed.join(", ")));
+  if (!backedUp.isEmpty())
+    parts.append(tr("The unreadable files were kept as %1.").arg(backedUp.join(", ")));
   if (parts.isEmpty())
     parts.append(tr("Nothing to save."));
   if (!m_loadWarnings.isEmpty())
-    setStatus(m_loadWarnings.join("\n"), true);
+    setStatus(m_loadWarnings.join("\n") + "\n" + parts.join(' '), true);
   else
     setStatus(parts.join(' '));
   return true;
@@ -373,20 +379,21 @@ void MainWindow::importLegacy()
   text += "\n\n" + tr(
                      "The copies are then renamed to *.bak-<date>, so PipeWire uses the system files again plus the configurator's drop-ins. "
                      "Settings in the copies that the configurator does not manage are not taken over; compare with the .bak files if you edited them by hand.");
+  if (isDirty())
+    text += "\n\n" + tr("Your other unsaved changes are saved at the same time.");
   if (QMessageBox::question(this, tr("Import settings"), text, QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Ok) != QMessageBox::Ok)
     return;
 
-  m_model = candidate;
-  for (const QString& f : result.files)
+  // Rename first (all or nothing), and only then take over the settings, so a failure changes nothing:
+  // neither the files on disk nor the settings being edited.
+  QStringList backups;
+  QString error;
+  if (!retireLegacyCopies(result.files, &backups, &error))
   {
-    const QString target = backupName(f);
-    if (!QFile::rename(f, target))
-    {
-      setStatus(tr("Could not rename %1. Nothing was changed on disk.").arg(f), true);
-      m_model = ConfigModel::load(m_paths);
-      return;
-    }
+    setStatus(error, true);
+    return;
   }
+  m_model = candidate;
   m_unapplied.insert(ConfigFile::Pipewire);  // the main files changed: restart everything
   if (save())
     setStatus(tr("Imported %n setting(s) and renamed the copies. Use Save and Apply to restart the audio services.", nullptr, int(result.imported.size())));

@@ -343,6 +343,130 @@ private slots:
     QCOMPARE(fractionToMs("bad"), -1.0);
     QCOMPARE(parseIntList("[ 44100 48000 ]"), QList<int>({44100, 48000}));
   }
+
+  // The computer plays to headphones as A2DP *source*; a2dp_sink is for receiving audio (e.g. from a phone).
+  void bluetoothRoleCheck()
+  {
+    auto none = [](const QString&) { return QString(); };
+    auto roles = [](const QString& list) { return [list](const QString& k) { return k == "bluez5.roles" ? list : QString(); }; };
+    const QStringList withoutSource = runChecks(Scope::BtGlobal, roles("[ a2dp_sink hfp_hf ]"), none);
+    QCOMPARE(withoutSource.size(), 1);
+    QVERIFY(withoutSource.first().contains("A2DP source"));
+    QVERIFY(runChecks(Scope::BtGlobal, roles("[ a2dp_source hfp_ag ]"), none).isEmpty());
+    QVERIFY(runChecks(Scope::BtGlobal, none, none).isEmpty());  // not set: no warning
+
+    // The labels name the role the computer takes, not the role of the headphones.
+    const SettingDef* def = Schema::instance().find("bluez5.roles");
+    QVERIFY(def);
+    QVERIFY(def->optionLabel("a2dp_source").contains("headphones", Qt::CaseInsensitive));
+    QVERIFY(def->optionLabel("hfp_ag").contains("headset", Qt::CaseInsensitive));
+    QVERIFY(!def->optionLabel("a2dp_sink").contains("playback", Qt::CaseInsensitive));
+  }
+
+  // Values the configurator does not manage (hand edits) are written back unchanged.
+  void unmanagedValuesRoundTrip()
+  {
+    QTemporaryDir dir;
+    const ConfigPaths p = tempPaths(dir);
+    writeFile(p.ownFile(ConfigFile::WirePlumber),
+              QStringList{
+                "monitor.alsa.rules = [ { matches = [ { node.name = \"x\" } ]",
+                "  actions = { update-props = { audio.rate = 48000 api.alsa.foo = { a = 1 b = [ c d ] } } } } ]",
+              }
+                .join('\n'));
+    writeFile(p.ownFile(ConfigFile::Pipewire), "context.properties = { my.list = [ { a = 1 } { b = 2 } ] \"weird key\" = 1 }");
+    QStringList warnings;
+    const ConfigModel m = ConfigModel::load(p, &warnings);
+    QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join('\n')));
+    const auto files = m.render();
+
+    SpaJson::Error error;
+    const QVariantMap wp = SpaJson::parseDocument(files.value(ConfigFile::WirePlumber), &error);
+    QVERIFY2(!error.isError(), qPrintable(error.message));
+    const QVariant foo = wp.value("monitor.alsa.rules").toList().value(0).toMap().value("actions").toMap().value("update-props").toMap().value("api.alsa.foo");
+    QCOMPARE(foo.typeId(), int(QMetaType::QVariantMap));
+    QCOMPARE(foo.toMap().value("a").toString(), QString("1"));
+    QCOMPARE(SpaJson::toStringList(foo.toMap().value("b")), QStringList({"c", "d"}));
+
+    const QVariantMap pw = SpaJson::parseDocument(files.value(ConfigFile::Pipewire), &error);
+    QVERIFY2(!error.isError(), qPrintable(error.message + "\n" + files.value(ConfigFile::Pipewire)));
+    const QVariantMap ctx = pw.value("context.properties").toMap();
+    QCOMPARE(ctx.value("weird key").toString(), QString("1"));
+    const QVariantList list = ctx.value("my.list").toList();
+    QCOMPARE(list.size(), 2);
+    QCOMPARE(list.value(0).toMap().value("a").toString(), QString("1"));
+    QCOMPARE(list.value(1).toMap().value("b").toString(), QString("2"));
+
+    // Writing and loading again is stable.
+    saveModel(m, p);
+    QCOMPARE(ConfigModel::load(p).render(), files);
+  }
+
+  // Retiring the legacy copies is all or nothing.
+  void retireLegacyCopiesRollsBack()
+  {
+    QTemporaryDir dir;
+    const ConfigPaths p = tempPaths(dir);
+    const QString a = p.legacyUserCopy(ConfigFile::Pipewire);
+    const QString b = p.legacyUserCopy(ConfigFile::Client);
+    writeFile(a, "context.properties = { }");
+    // |b| does not exist (e.g. removed after the banner was shown), so renaming it fails.
+    QStringList backups;
+    QString error;
+    QVERIFY(!retireLegacyCopies({a, b}, &backups, &error));
+    QVERIFY(error.contains(b));
+    QVERIFY(QFile::exists(a));  // moved back
+    QVERIFY(backups.isEmpty());
+    QCOMPARE(QDir(p.userDir(ConfigFile::Pipewire)).entryList({"*.bak-*"}, QDir::Files).size(), 0);
+
+    writeFile(b, "stream.properties = { }");
+    QVERIFY(retireLegacyCopies({a, b}, &backups, &error));
+    QCOMPARE(backups.size(), 2);
+    QVERIFY(!QFile::exists(a) && !QFile::exists(b));
+    for (const QString& bak : backups)
+      QVERIFY(QFile::exists(bak));
+  }
+
+  // WirePlumber (not PipeWire) supports "override.<section>", which replaces instead of merging.
+  void wireplumberOverrideSection()
+  {
+    QTemporaryDir dir;
+    const ConfigPaths p = tempPaths(dir);
+    const QString sys = dir.path() + "/usr/share/wireplumber";
+    writeFile(sys + "/wireplumber.conf", "wireplumber.settings = { a = 1 b = 2 }");
+    writeFile(sys + "/wireplumber.conf.d/10-replace.conf", "override.wireplumber.settings = { c = 3 }");
+    writeFile(p.userDir(ConfigFile::WirePlumber) + "/wireplumber.conf.d/90-late.conf", "override.monitor.bluez.properties = { bluez5.roles = [ a2dp_source ] }");
+    const EffectiveConfig wp = EffectiveConfig::load(p, ConfigFile::WirePlumber);
+    QVERIFY(!wp.value("wireplumber.settings", "a").isValid());  // replaced
+    QCOMPARE(wp.value("wireplumber.settings", "c").value.toString(), QString("3"));
+    // A later file replacing a whole section overrides every key of ours in it.
+    QVERIFY(wp.overriddenBy("monitor.bluez.properties", "bluez5.roles").file.endsWith("90-late.conf"));
+    const ValueOrigin codecs = wp.overriddenBy("monitor.bluez.properties", "bluez5.codecs");
+    QVERIFY(codecs.file.endsWith("90-late.conf"));
+    QVERIFY(!codecs.value.isValid());  // not set by that file, just dropped
+
+    // PipeWire treats the prefix as an unknown section name.
+    const QString pwSys = dir.path() + "/usr/share/pipewire";
+    writeFile(pwSys + "/pipewire.conf", "context.properties = { default.clock.rate = 48000 }");
+    writeFile(pwSys + "/pipewire.conf.d/10-x.conf", "override.context.properties = { default.clock.quantum = 64 }");
+    const EffectiveConfig pw = EffectiveConfig::load(p, ConfigFile::Pipewire);
+    QCOMPARE(pw.value("context.properties", "default.clock.rate").value.toString(), QString("48000"));
+    QVERIFY(!pw.value("context.properties", "default.clock.quantum").isValid());
+  }
+
+  // WirePlumber also reads $XDG_CONFIG_DIRS/wireplumber and $XDG_DATA_DIRS/wireplumber.
+  void wireplumberSearchDirs()
+  {
+    const QByteArray oldConfig = qgetenv("XDG_CONFIG_DIRS"), oldData = qgetenv("XDG_DATA_DIRS");
+    qputenv("XDG_CONFIG_DIRS", "/etc/xdg:/opt/cfg");
+    qputenv("XDG_DATA_DIRS", "/usr/local/share:/usr/share");
+    const ConfigPaths p = ConfigPaths::fromEnvironment();
+    qputenv("XDG_CONFIG_DIRS", oldConfig);
+    qputenv("XDG_DATA_DIRS", oldData);
+    // Lowest priority first, each directory once.
+    QCOMPARE(p.systemWireplumberDirs, QStringList({"/usr/share/wireplumber", "/usr/local/share/wireplumber", "/etc/wireplumber", "/opt/cfg/wireplumber", "/etc/xdg/wireplumber"}));
+    QCOMPARE(p.systemPipewireDirs, QStringList({"/usr/share/pipewire", "/etc/pipewire"}));
+  }
 };
 
 QTEST_GUILESS_MAIN(TestCore)

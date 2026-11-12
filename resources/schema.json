@@ -332,16 +332,16 @@
           "type": "list",
           "default": "[ a2dp_sink a2dp_source bap_sink bap_source hfp_hf hfp_ag ]",
           "options": [
-            { "value": "a2dp_sink", "label": "A2DP sink (high quality playback)" },
-            { "value": "a2dp_source", "label": "A2DP source" },
-            { "value": "bap_sink", "label": "LE Audio sink" },
-            { "value": "bap_source", "label": "LE Audio source" },
-            { "value": "hfp_hf", "label": "HFP hands-free (headset with mic)" },
-            { "value": "hfp_ag", "label": "HFP audio gateway" },
-            { "value": "hsp_hs", "label": "HSP headset" },
-            { "value": "hsp_ag", "label": "HSP audio gateway" }
+            { "value": "a2dp_sink", "label": "A2DP sink (receive audio, e.g. from a phone)" },
+            { "value": "a2dp_source", "label": "A2DP source (play to headphones)" },
+            { "value": "bap_sink", "label": "LE Audio sink (receive audio)" },
+            { "value": "bap_source", "label": "LE Audio source (play to LE Audio headphones)" },
+            { "value": "hfp_hf", "label": "HFP hands-free (act as a phone's headset)" },
+            { "value": "hfp_ag", "label": "HFP audio gateway (headset microphone)" },
+            { "value": "hsp_hs", "label": "HSP headset (act as a headset)" },
+            { "value": "hsp_ag", "label": "HSP audio gateway (old headsets)" }
           ],
-          "help": "Bluetooth profiles this computer offers. Removing the HFP roles disables the headset (microphone) profile."
+          "help": "Roles this computer takes. To play to headphones it is the A2DP source; to use a headset microphone it is the HFP audio gateway. The sink and hands-free roles are for receiving audio, e.g. from a phone."
         },
         { "key": "bluez5.enable-msbc", "label": "Enable mSBC", "type": "bool", "help": "Wideband speech codec for the headset profile. Enabled by default for known-good headsets." },
         { "key": "bluez5.enable-hw-volume", "label": "Hardware volume", "type": "bool", "help": "Let the headphones control the volume themselves. Turn off if volume jumps or is too quiet." },

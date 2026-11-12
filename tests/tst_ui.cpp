@@ -364,6 +364,85 @@ private slots:
     QVERIFY(anyVisibleLabelContains(w, "Full copies of client.conf"));
     QVERIFY(button(w, "Import and retire copies…"));
   }
+
+  // Ticking a setting without a known value must not write an empty or made-up value.
+  void tickWithoutValueWaitsForInput()
+  {
+    QTemporaryDir dir;
+    MainWindow::Options o = options();
+    o.paths.userConfigHome = dir.path() + "/config";
+    MainWindow w(o);
+    w.show();
+    w.showPage("stream");
+
+    SettingEditor* rate = editor(w, "node.force-rate");
+    overrideBox(rate)->click();
+    QVERIFY(overrideBox(rate)->isChecked());  // ticked and waiting for a value
+    QVERIFY(!w.isWindowModified());
+    QVERIFY(anyVisibleLabelContains(w, "Enter a value"));
+    setText(rate, "96000");
+    QVERIFY(w.isWindowModified());
+
+    SettingEditor* upmix = editor(w, "channelmix.upmix");
+    QCOMPARE(upmix->effectiveValue(), QString());  // no default, nothing inherited
+    overrideBox(upmix)->click();
+    QVERIFY(!upmix->isOverridden());  // not silently "No"
+    auto* combo = upmix->findChild<QComboBox*>();
+    combo->setCurrentIndex(combo->findData("true"));
+    emit combo->activated(combo->currentIndex());
+    QVERIFY(upmix->isOverridden());
+
+    button(w, "Save")->click();
+    const QString text = readFile(o.paths.ownFile(ConfigFile::Client));
+    QVERIFY2(text.contains("node.force-rate = 96000"), qPrintable(text));
+    QVERIFY(text.contains("channelmix.upmix = true"));
+    QVERIFY(!text.contains("\"\""));
+
+    // Unticking a pending setting leaves nothing behind.
+    w.showPage("alsa:" + kDac);
+    SettingEditor* prio = editor(w, "priority.session");
+    QCOMPARE(prio->effectiveValue(), QString());
+    overrideBox(prio)->click();
+    overrideBox(prio)->click();
+    QVERIFY(!overrideBox(prio)->isChecked());
+    QVERIFY(!w.isWindowModified());
+  }
+
+  // A hand-edited drop-in that does not parse is left alone by saves that do not touch it, and backed
+  // up (not lost) when it has to be replaced.
+  void brokenOwnFileIsKept()
+  {
+    QTemporaryDir dir;
+    MainWindow::Options o = options();
+    o.paths.userConfigHome = dir.path() + "/config";
+    const QString wpFile = o.paths.ownFile(ConfigFile::WirePlumber);
+    const QByteArray broken = "monitor.alsa.rules = [ { matches = [ \n";
+    QDir().mkpath(QFileInfo(wpFile).absolutePath());
+    {
+      QFile f(wpFile);
+      QVERIFY(f.open(QIODevice::WriteOnly));
+      f.write(broken);
+    }
+
+    MainWindow w(o);
+    w.show();
+    w.showPage("graph");
+    overrideBox(editor(w, "clock.power-of-two-quantum"))->click();
+    button(w, "Save")->click();
+    QCOMPARE(readFile(wpFile).toUtf8(), broken);  // untouched
+
+    w.showPage("bluetooth");
+    SettingEditor* sbcXq = editor(w, "bluez5.enable-sbc-xq");
+    overrideBox(sbcXq)->click();
+    auto* combo = sbcXq->findChild<QComboBox*>();
+    combo->setCurrentIndex(combo->findData("true"));
+    emit combo->activated(combo->currentIndex());
+    button(w, "Save")->click();
+    QVERIFY(readFile(wpFile).contains("bluez5.enable-sbc-xq = true"));
+    const QStringList backups = QFileInfo(wpFile).dir().entryList({"*.bak-*"}, QDir::Files);
+    QCOMPARE(backups.size(), 1);
+    QCOMPARE(readFile(QFileInfo(wpFile).dir().filePath(backups.first())).toUtf8(), broken);
+  }
 };
 
 QTEST_MAIN(TestUi)

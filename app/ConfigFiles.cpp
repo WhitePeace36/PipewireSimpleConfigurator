@@ -2,6 +2,7 @@
 
 #include "SpaJson.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
@@ -32,12 +33,42 @@ QList<ConfigFile> allConfigFiles()
   return {ConfigFile::Pipewire, ConfigFile::Client, ConfigFile::ClientRt, ConfigFile::Pulse, ConfigFile::Jack, ConfigFile::WirePlumber};
 }
 
+QString backupPath(const QString& path)
+{
+  const QString base = path + ".bak-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
+  QString candidate = base;
+  for (int i = 1; QFile::exists(candidate); ++i)
+    candidate = base + "-" + QString::number(i);
+  return candidate;
+}
+
+namespace
+{
+// Absolute directories from a colon-separated XDG variable, or |fallback| when it is unset or empty.
+QStringList xdgDirs(const char* variable, const QStringList& fallback)
+{
+  QStringList out;
+  for (const QString& d : qEnvironmentVariable(variable).split(':', Qt::SkipEmptyParts))
+  {
+    if (QDir::isAbsolutePath(d))
+      out.append(QDir::cleanPath(d));
+  }
+  return out.isEmpty() ? fallback : out;
+}
+}  // namespace
+
 ConfigPaths ConfigPaths::fromEnvironment()
 {
   ConfigPaths p;
   p.userConfigHome = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
   p.systemPipewireDirs = {"/usr/share/pipewire", "/etc/pipewire"};
-  p.systemWireplumberDirs = {"/usr/share/wireplumber", "/etc/wireplumber"};
+
+  // WirePlumber searches, highest priority first: $XDG_CONFIG_HOME (the user dir), $XDG_CONFIG_DIRS,
+  // /etc, $XDG_DATA_DIRS, /usr/share. A directory listed twice counts at its higher position.
+  QStringList wp = xdgDirs("XDG_CONFIG_DIRS", {"/etc/xdg"}) + QStringList{"/etc"} + xdgDirs("XDG_DATA_DIRS", {"/usr/local/share", "/usr/share"}) + QStringList{"/usr/share"};
+  wp.removeDuplicates();
+  for (auto it = wp.crbegin(); it != wp.crend(); ++it)
+    p.systemWireplumberDirs.append(*it + "/wireplumber");
   return p;
 }
 
@@ -82,15 +113,25 @@ bool readText(const QString& path, QString& out)
   return true;
 }
 
-void mergeInto(QMap<QString, QMap<QString, ValueOrigin>>& target, const QVariantMap& doc, const QString& file)
+// |replaced| is null when "override." sections are not supported (PipeWire); otherwise sections that a
+// file replaces are recorded there.
+void mergeInto(QMap<QString, QMap<QString, ValueOrigin>>& target, const QVariantMap& doc, const QString& file, QMap<QString, QString>* replaced)
 {
+  static const QString prefix = QStringLiteral("override.");
   for (auto it = doc.begin(); it != doc.end(); ++it)
   {
     if (it->typeId() != QMetaType::QVariantMap)
       continue;
+    QString name = it.key();
+    if (replaced && name.startsWith(prefix))
+    {
+      name = name.mid(prefix.size());
+      target[name].clear();  // everything loaded earlier for this section is dropped
+      replaced->insert(name, file);
+    }
     const QVariantMap section = it->toMap();
     for (auto kv = section.begin(); kv != section.end(); ++kv)
-      target[it.key()][kv.key()] = {kv.value(), file};
+      target[name][kv.key()] = {kv.value(), file};
   }
 }
 }  // namespace
@@ -111,7 +152,9 @@ EffectiveConfig EffectiveConfig::load(const ConfigPaths& paths, ConfigFile which
     }
   }
 
-  auto loadInto = [&cfg](QMap<QString, QMap<QString, ValueOrigin>>& target, const QString& path)
+  const bool supportsOverride = which == ConfigFile::WirePlumber;
+  QMap<QString, QString> replacedBefore;  // not needed later: replacing before our file only changes the inherited values
+  auto loadInto = [&](QMap<QString, QMap<QString, ValueOrigin>>& target, const QString& path)
   {
     QString text;
     if (!readText(path, text))
@@ -121,7 +164,7 @@ EffectiveConfig EffectiveConfig::load(const ConfigPaths& paths, ConfigFile which
     if (error.isError())
       cfg.errors.append(QStringLiteral("%1:%2: %3").arg(path).arg(error.line).arg(error.message));
     else
-      mergeInto(target, doc, path);
+      mergeInto(target, doc, path, !supportsOverride ? nullptr : (&target == &cfg.m_after ? &cfg.m_replacedAfter : &replacedBefore));
   };
 
   if (!cfg.mainFile.isEmpty())
@@ -169,5 +212,10 @@ ValueOrigin EffectiveConfig::value(const QString& section, const QString& key) c
 
 ValueOrigin EffectiveConfig::overriddenBy(const QString& section, const QString& key) const
 {
-  return m_after.value(section).value(key);
+  const ValueOrigin set = m_after.value(section).value(key);
+  if (set.isValid())
+    return set;
+  if (m_replacedAfter.contains(section))
+    return {QVariant(), m_replacedAfter.value(section)};  // section replaced: the key is dropped
+  return {};
 }

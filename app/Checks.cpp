@@ -125,9 +125,10 @@ QStringList runChecks(const QString& scope, const ValueGetter& value, const Valu
     const QStringList codecs = SpaJson::toStringList(value("bluez5.codecs"));
     if (!value("bluez5.codecs").isEmpty() && !codecs.contains("sbc"))
       w.append(QObject::tr("SBC is not allowed. It is the one codec every headphone supports, so without it some headphones will not connect in high-quality mode."));
+    // Roles are the computer's side of the connection: it plays to headphones as the A2DP source.
     const QStringList roles = SpaJson::toStringList(value("bluez5.roles"));
-    if (!value("bluez5.roles").isEmpty() && !roles.contains("a2dp_sink"))
-      w.append(QObject::tr("The A2DP sink role is disabled, so headphones only get the low-quality headset profile."));
+    if (!value("bluez5.roles").isEmpty() && !roles.contains("a2dp_source"))
+      w.append(QObject::tr("The A2DP source role is disabled, so headphones only get the low-quality headset profile."));
     const long long rate = num(value("bluez5.default.rate"));
     if (rate > 48000)
       w.append(QObject::tr("Only a few codecs (LDAC, LC3plus) support more than 48 kHz; others fall back to 48 or 44.1 kHz."));

@@ -85,7 +85,9 @@ public:
     // Blank when the value is unknown, rather than pretending it is "No".
     m_box->setCurrentIndex(s.isEmpty() ? -1 : (s == "true" || s == "1") ? 0 : 1);
   }
-  QVariant value() const override { return m_box->currentIndex() == 0 ? "true" : "false"; }
+  // Blank (nothing chosen) is not a value; it must not turn into "No".
+  QVariant value() const override { return m_box->currentIndex() < 0 ? QString() : m_box->currentData().toString(); }
+  bool isAcceptable() const override { return m_box->currentIndex() >= 0; }
 
 private:
   QComboBox* m_box;
@@ -178,7 +180,8 @@ public:
     }
     m_box->setCurrentIndex(idx);  // -1 (empty) when nothing is known
   }
-  QVariant value() const override { return m_box->currentIndex() < 0 ? m_box->itemData(0).toString() : m_box->currentData().toString(); }
+  QVariant value() const override { return m_box->currentIndex() < 0 ? QString() : m_box->currentData().toString(); }
+  bool isAcceptable() const override { return m_box->currentIndex() >= 0; }
 
 private:
   QComboBox* m_box;
@@ -458,6 +461,14 @@ SettingEditor::SettingEditor(const SettingDef& def, const SettingBinding& bindin
   refresh();
 }
 
+bool SettingEditor::editorHasValue() const
+{
+  if (!m_editor->isAcceptable())
+    return false;
+  const QVariant v = m_editor->value();
+  return m_def.isListType() ? !SpaJson::toStringList(v).isEmpty() : !v.toString().trimmed().isEmpty();
+}
+
 bool SettingEditor::isOverridden() const
 {
   const Values* v = m_binding.values(false);
@@ -482,17 +493,19 @@ void SettingEditor::refresh()
 {
   m_updating = true;
   const bool on = isOverridden();
-  m_override->setChecked(on);
+  if (on)
+    m_pending = false;
+  m_override->setChecked(on || m_pending);
   if (on)
   {
     m_editor->setValue(m_binding.values(false)->value(m_def.key));
   }
-  else
+  else if (!m_pending)  // keep what the user has entered so far
   {
     const QString shown = effectiveValue();
     m_editor->setValue(m_def.isListType() ? QVariant(SpaJson::toStringList(shown)) : QVariant(shown));
   }
-  m_editor->setEnabled(on);
+  m_editor->setEnabled(on || m_pending);
   m_updating = false;
   updateHints();
 }
@@ -501,10 +514,15 @@ void SettingEditor::onOverrideToggled(bool on)
 {
   if (m_updating)
     return;
+  m_pending = false;
   if (on)
   {
-    Values* v = m_binding.values(true);
-    v->insert(m_def.key, m_editor->value());
+    // Pin the value shown. When nothing is known (no default, no other config file, not running),
+    // wait for the user to enter one instead of writing an empty or made-up value.
+    if (editorHasValue())
+      m_binding.values(true)->insert(m_def.key, m_editor->value());
+    else
+      m_pending = true;
   }
   else if (Values* v = m_binding.values(false))
   {
@@ -520,8 +538,18 @@ void SettingEditor::onEdited()
 {
   if (m_updating || !m_override->isChecked())
     return;
-  if (m_editor->isAcceptable())
+  if (editorHasValue())
+  {
     m_binding.values(true)->insert(m_def.key, m_editor->value());
+    m_pending = false;
+  }
+  else if (m_def.isListType())
+  {
+    // All boxes cleared: nothing to write, but the row stays ticked for a new choice.
+    if (Values* v = m_binding.values(false))
+      v->remove(m_def.key);
+    m_pending = true;
+  }
   updateHints();
   emit changed();
 }
@@ -536,7 +564,12 @@ void SettingEditor::updateHints()
   const QString live = m_binding.live ? m_binding.live(m_def.key) : QString();
   auto show = [this](const QString& v) { return m_def.isListType() ? displayList(m_def, SpaJson::toStringList(v)) : (m_def.type == SettingDef::Enum ? m_def.optionLabel(v) : v); };
 
-  if (on)
+  if (m_pending && !on)
+  {
+    const bool choice = m_def.type == SettingDef::Bool || m_def.type == SettingDef::Enum || m_def.isListType();
+    lines.append(choice ? tr("Choose a value to set it here.") : tr("Enter a value to set it here."));
+  }
+  else if (on)
   {
     QString line = tr("Set here.");
     if (inherited.isValid())
@@ -570,7 +603,9 @@ void SettingEditor::updateHints()
 
   const ValueOrigin later = m_binding.overriddenBy ? m_binding.overriddenBy(m_def.key) : ValueOrigin();
   QString warning;
-  if (on && later.isValid())
+  if (on && later.isValid() && !later.value.isValid())
+    warning = tr("⚠ %1 loads after this tool's file and replaces this whole section, so your value has no effect.").arg(later.file);
+  else if (on && later.isValid())
     warning = tr("⚠ %1 loads after this tool's file and sets this to %2, so your value has no effect.").arg(later.file, show(valueText(later.value)));
   else if (on && !m_def.warning.isEmpty())
     warning = "⚠ " + m_def.warning;
@@ -578,5 +613,5 @@ void SettingEditor::updateHints()
   m_warning->setVisible(!warning.isEmpty());
 
   m_source->setText(lines.join('\n'));
-  setDimmed(m_source, !on);
+  setDimmed(m_source, !on && !m_pending);
 }
