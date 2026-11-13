@@ -9,7 +9,7 @@
 # to this directory. makepkg's working folders src/ and pkg/ are created here too and can be deleted.
 
 pkgname=pipewire-configurator-simple
-pkgver=2.0
+pkgver=2.0.1
 pkgrel=1
 pkgdesc='GUI tool for PipeWire and WirePlumber settings'
 arch=('x86_64' 'aarch64')
